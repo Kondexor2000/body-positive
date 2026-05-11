@@ -1,0 +1,18 @@
+@HostAddress = http://localhost:5254
+@ApiKey = dev-api-key-change-me
+@AuditId = 00000000-0000-0000-0000-000000000000
+
+GET {{HostAddress}}/health
+Accept: application/json
+
+###
+
+GET {{HostAddress}}/api/audits/{{AuditId}}
+X-Api-Key: {{ApiKey}}
+Accept: application/json
+
+###
+
+GET {{HostAddress}}/api/audits/{{AuditId}}/report
+X-Api-Key: {{ApiKey}}
+Accept: text/html

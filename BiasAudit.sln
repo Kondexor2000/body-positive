@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BiasAudit.Api", "BiasAudit.Api\BiasAudit.Api.csproj", "{127513EC-47AB-48B4-BAD3-7ED53DE20A7D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BiasAudit.Api.Tests", "BiasAudit.Api.Tests\BiasAudit.Api.Tests.csproj", "{63126550-69DA-4199-AE5A-D5BD6D681831}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{127513EC-47AB-48B4-BAD3-7ED53DE20A7D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{127513EC-47AB-48B4-BAD3-7ED53DE20A7D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{127513EC-47AB-48B4-BAD3-7ED53DE20A7D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{127513EC-47AB-48B4-BAD3-7ED53DE20A7D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{63126550-69DA-4199-AE5A-D5BD6D681831}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{63126550-69DA-4199-AE5A-D5BD6D681831}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{63126550-69DA-4199-AE5A-D5BD6D681831}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{63126550-69DA-4199-AE5A-D5BD6D681831}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
