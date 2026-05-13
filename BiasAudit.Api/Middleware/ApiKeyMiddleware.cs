@@ -1,4 +1,5 @@
 using BiasAudit.Api.Options;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
 using Microsoft.Net.Http.Headers;
 
@@ -10,7 +11,9 @@ public sealed class ApiKeyMiddleware(RequestDelegate next, IOptions<ApiKeyOption
 
     public async Task InvokeAsync(HttpContext context)
     {
-        if (IsPublicEndpoint(context))
+        var endpoint = context.GetEndpoint();
+
+        if (endpoint?.Metadata.GetMetadata<IAllowAnonymous>() != null)
         {
             await next(context);
             return;
@@ -21,18 +24,15 @@ public sealed class ApiKeyMiddleware(RequestDelegate next, IOptions<ApiKeyOption
         {
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
             context.Response.Headers[HeaderNames.WWWAuthenticate] = "ApiKey";
-            await context.Response.WriteAsJsonAsync(new { message = "Brak poprawnego klucza API." });
+
+            await context.Response.WriteAsJsonAsync(new
+            {
+                message = "Brak poprawnego klucza API."
+            });
+
             return;
         }
 
         await next(context);
-    }
-
-    private static bool IsPublicEndpoint(HttpContext context)
-    {
-        var path = context.Request.Path.Value ?? string.Empty;
-        return path.Equals("/health", StringComparison.OrdinalIgnoreCase) ||
-               path.Equals("/api-test.html", StringComparison.OrdinalIgnoreCase) ||
-               path.StartsWith("/swagger", StringComparison.OrdinalIgnoreCase);
     }
 }

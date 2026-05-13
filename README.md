@@ -16,11 +16,7 @@ Body-positive WebAPI for auditing image moderation. The project accepts uploads,
 
 ## Local Setup
 
-1. Start containers:
-
-```powershell
-docker compose up -d
-```
+Make sure Docker Desktop is running before starting the containers.
 
 2. Run the API:
 
@@ -31,6 +27,9 @@ dotnet run --project .\BiasAudit.Api\BiasAudit.Api.csproj
 3. Open the browser to the address shown in the logs, typically: `https://localhost:7072`
 
 4. Swagger is available at `https://localhost:7072/swagger`.
+
+PostgreSQL is exposed on host port `5433` to avoid conflicts with local
+PostgreSQL installations on `5432`.
 
 ## API Test Client
 
@@ -61,7 +60,7 @@ dotnet test
 
 Unit tests use Moq to mock dependencies such as database and external services. Integration tests use WebApplicationFactory to verify endpoints.
 
-Current status: **11/11 tests passing**.
+Current status: **27/27 tests passing**.
 
 ## Example Upload
 

@@ -5,10 +5,23 @@ namespace BiasAudit.Api.Data;
 
 public sealed class AuditDbContext(DbContextOptions<AuditDbContext> options) : DbContext(options)
 {
+    public DbSet<User> Users => Set<User>();
     public DbSet<AuditJob> AuditJobs => Set<AuditJob>();
+    public DbSet<RevokedToken> RevokedTokens => Set<RevokedToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<User>()
+            .HasIndex(x => x.Username)
+            .IsUnique();
+
+        modelBuilder.Entity<User>()
+            .HasIndex(x => x.Email)
+            .IsUnique();
+
+        modelBuilder.Entity<RevokedToken>()
+            .HasIndex(x => x.JwtId)
+            .IsUnique();
         modelBuilder.Entity<AuditJob>(entity =>
         {
             entity.ToTable("audit_jobs");
