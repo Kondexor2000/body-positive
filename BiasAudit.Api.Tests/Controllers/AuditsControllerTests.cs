@@ -1,3 +1,5 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using BiasAudit.Api.Controllers;
 using BiasAudit.Api.Data;
 using BiasAudit.Api.Models;
@@ -20,6 +22,7 @@ public sealed class AuditsControllerTests : IDisposable
     private readonly Mock<IReportRenderer> _mockRenderer = new();
     private readonly AuditOptions _auditOptions = new();
     private readonly AuditsController _controller;
+    private readonly Guid _testUserId = Guid.NewGuid();
 
     public AuditsControllerTests()
     {
@@ -34,6 +37,20 @@ public sealed class AuditsControllerTests : IDisposable
             _mockQueue.Object,
             _mockRenderer.Object,
             OptionsFactory.Create(_auditOptions));
+        
+        SetupUserContext();
+    }
+
+    private void SetupUserContext()
+    {
+        var claims = new[] { new Claim(JwtRegisteredClaimNames.Sub, _testUserId.ToString()) };
+        var identity = new ClaimsIdentity(claims);
+        var principal = new ClaimsPrincipal(identity);
+        
+        _controller.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext { User = principal }
+        };
     }
 
     [Fact]
@@ -100,9 +117,28 @@ public sealed class AuditsControllerTests : IDisposable
     }
 
     [Fact]
+    public async Task MyAudits_ReturnsUserAudits()
+    {
+        var job1 = AuditJob.Create(_testUserId, "key1", "file1.jpg", "image/jpeg", 1000, null, null, null);
+        var job2 = AuditJob.Create(_testUserId, "key2", "file2.jpg", "image/jpeg", 2000, null, null, null);
+        var otherUserJob = AuditJob.Create(Guid.NewGuid(), "key3", "file3.jpg", "image/jpeg", 3000, null, null, null);
+        
+        _db.AuditJobs.AddRange(job1, job2, otherUserJob);
+        await _db.SaveChangesAsync();
+
+        var result = await _controller.MyAudits(CancellationToken.None);
+
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        var audits = Assert.IsAssignableFrom<IEnumerable<AuditStatusResponse>>(okResult.Value);
+        Assert.Equal(2, audits.Count());
+        Assert.Contains(audits, a => a.Id == job1.Id);
+        Assert.Contains(audits, a => a.Id == job2.Id);
+    }
+
+    [Fact]
     public async Task Get_ExistingJob_ReturnsOk()
     {
-        var job = AuditJob.Create("key", "file.jpg", "image/jpeg", 1000, null, null, null);
+        var job = AuditJob.Create(_testUserId, "key", "file.jpg", "image/jpeg", 1000, null, null, null);
         _db.AuditJobs.Add(job);
         await _db.SaveChangesAsync();
 
@@ -124,9 +160,24 @@ public sealed class AuditsControllerTests : IDisposable
     }
 
     [Fact]
+    public async Task Get_OtherUserJob_ReturnsNotFound()
+    {
+        var otherUserId = Guid.NewGuid();
+        var job = AuditJob.Create(otherUserId, "key", "file.jpg", "image/jpeg", 1000, null, null, null);
+        _db.AuditJobs.Add(job);
+        await _db.SaveChangesAsync();
+
+        var result = await _controller.Get(job.Id, CancellationToken.None);
+
+        var notFound = Assert.IsType<NotFoundObjectResult>(result.Result);
+        var response = Assert.IsType<ProblemDetailsResponse>(notFound.Value);
+        Assert.Contains("Nie znaleziono", response.Message);
+    }
+
+    [Fact]
     public async Task Report_CompletedJob_ReturnsHtml()
     {
-        var job = AuditJob.Create("key", "file.jpg", "image/jpeg", 1000, null, null, null);
+        var job = AuditJob.Create(_testUserId, "key", "file.jpg", "image/jpeg", 1000, null, null, null);
         job.Complete([], new AuditFindingSet(0.1m, []));
         _db.AuditJobs.Add(job);
         await _db.SaveChangesAsync();
@@ -143,7 +194,7 @@ public sealed class AuditsControllerTests : IDisposable
     [Fact]
     public async Task Report_IncompleteJob_ReturnsBadRequest()
     {
-        var job = AuditJob.Create("key", "file.jpg", "image/jpeg", 1000, null, null, null);
+        var job = AuditJob.Create(_testUserId, "key", "file.jpg", "image/jpeg", 1000, null, null, null);
         job.MarkProcessing();
         _db.AuditJobs.Add(job);
         await _db.SaveChangesAsync();
@@ -153,6 +204,16 @@ public sealed class AuditsControllerTests : IDisposable
         var badRequest = Assert.IsType<BadRequestObjectResult>(result);
         var response = Assert.IsType<ProblemDetailsResponse>(badRequest.Value);
         Assert.Contains("zakonczeniu", response.Message);
+    }
+
+    [Fact]
+    public async Task Report_NonExistingJob_ReturnsNotFound()
+    {
+        var result = await _controller.Report(Guid.NewGuid(), CancellationToken.None);
+
+        var notFound = Assert.IsType<NotFoundObjectResult>(result);
+        var response = Assert.IsType<ProblemDetailsResponse>(notFound.Value);
+        Assert.Contains("Nie znaleziono", response.Message);
     }
 
     public void Dispose() => _db.Dispose();

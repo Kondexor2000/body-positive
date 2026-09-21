@@ -5,6 +5,7 @@ public sealed record UploadAuditResponse(Guid Id, string Status);
 public sealed record AuditStatusResponse(
     Guid Id,
     string Status,
+    string OriginalFileName,
     decimal BiasRiskScore,
     string? ModelDecision,
     string? Cohort,
@@ -18,6 +19,7 @@ public sealed record AuditStatusResponse(
         new(
             job.Id,
             job.Status.ToString(),
+            job.OriginalFileName,
             job.BiasRiskScore,
             job.ModelDecision,
             job.Cohort,

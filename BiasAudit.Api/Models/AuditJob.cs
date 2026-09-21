@@ -5,32 +5,66 @@ namespace BiasAudit.Api.Models;
 public sealed class AuditJob
 {
     public Guid Id { get; private set; } = Guid.NewGuid();
+
+    // OWNER
+    public Guid UserId { get; private set; }
+
+    public User User { get; private set; } = default!;
+
+    // STATUS
     public AuditStatus Status { get; private set; } = AuditStatus.Queued;
+
+    // FILE
     public string ObjectKey { get; private set; } = string.Empty;
+
     public string OriginalFileName { get; private set; } = string.Empty;
+
     public string ContentType { get; private set; } = string.Empty;
+
     public long SizeBytes { get; private set; }
+
+    // OPTIONAL USER DATA
     public string? ModelDecision { get; private set; }
+
     public string? Cohort { get; private set; }
+
     public string? Notes { get; private set; }
+
+    // RESULTS
     public string NudeNetJson { get; private set; } = "[]";
+
     public string FindingsJson { get; private set; } = "[]";
+
     public decimal BiasRiskScore { get; private set; }
-    public DateTimeOffset CreatedAt { get; private set; } = DateTimeOffset.UtcNow;
+
+    // TIMESTAMPS
+    public DateTimeOffset CreatedAt { get; private set; } =
+        DateTimeOffset.UtcNow;
+
     public DateTimeOffset? StartedAt { get; private set; }
+
     public DateTimeOffset? CompletedAt { get; private set; }
+
+    // ERROR
     public string? Error { get; private set; }
 
+    private AuditJob()
+    {
+    }
+
     public static AuditJob Create(
+        Guid userId,
         string objectKey,
         string originalFileName,
         string contentType,
         long sizeBytes,
         string? modelDecision,
         string? cohort,
-        string? notes) =>
-        new()
+        string? notes)
+    {
+        return new AuditJob
         {
+            UserId = userId,
             ObjectKey = objectKey,
             OriginalFileName = Path.GetFileName(originalFileName),
             ContentType = contentType,
@@ -39,6 +73,7 @@ public sealed class AuditJob
             Cohort = Normalize(cohort),
             Notes = Normalize(notes)
         };
+    }
 
     public void MarkProcessing()
     {
@@ -47,31 +82,60 @@ public sealed class AuditJob
         Error = null;
     }
 
-    public void Complete(IReadOnlyCollection<NudeNetDetection> detections, AuditFindingSet findingSet)
+    public void Complete(
+        IReadOnlyCollection<NudeNetDetection> detections,
+        AuditFindingSet findingSet)
     {
         Status = AuditStatus.Completed;
+
         CompletedAt = DateTimeOffset.UtcNow;
-        NudeNetJson = JsonSerializer.Serialize(detections, JsonDefaults.Options);
-        FindingsJson = JsonSerializer.Serialize(findingSet.Findings, JsonDefaults.Options);
+
+        NudeNetJson = JsonSerializer.Serialize(
+            detections,
+            JsonDefaults.Options);
+
+        FindingsJson = JsonSerializer.Serialize(
+            findingSet.Findings,
+            JsonDefaults.Options);
+
         BiasRiskScore = findingSet.Score;
+
         Error = null;
     }
 
     public void Fail(string message)
     {
         Status = AuditStatus.Failed;
+
         CompletedAt = DateTimeOffset.UtcNow;
+
         Error = message;
     }
 
-    public IReadOnlyCollection<NudeNetDetection> GetDetections() =>
-        JsonSerializer.Deserialize<IReadOnlyCollection<NudeNetDetection>>(NudeNetJson, JsonDefaults.Options) ?? [];
+    public IReadOnlyCollection<NudeNetDetection> GetDetections()
+    {
+        return JsonSerializer.Deserialize<
+                   IReadOnlyCollection<NudeNetDetection>>(
+                   NudeNetJson,
+                   JsonDefaults.Options)
+               ?? [];
+    }
 
-    public IReadOnlyCollection<AuditFinding> GetFindings() =>
-        JsonSerializer.Deserialize<IReadOnlyCollection<AuditFinding>>(FindingsJson, JsonDefaults.Options) ?? [];
+    public IReadOnlyCollection<AuditFinding> GetFindings()
+    {
+        return JsonSerializer.Deserialize<
+                   IReadOnlyCollection<AuditFinding>>(
+                   FindingsJson,
+                   JsonDefaults.Options)
+               ?? [];
+    }
 
-    private static string? Normalize(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private static string? Normalize(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? null
+            : value.Trim();
+    }
 }
 
 public enum AuditStatus
