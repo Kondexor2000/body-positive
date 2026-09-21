@@ -57,6 +57,64 @@ input {
   border-radius: 6px;
 }
 
+input[type="file"] { padding: 8px; }
+
+select {
+  width: 100%;
+  min-height: 130px;
+  padding: 8px;
+  margin-top: 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: white;
+}
+
+.hidden { display: none; }
+
+.hint { color: var(--muted); font-size: .9rem; line-height: 1.4; }
+
+.photo-list { display: grid; gap: 10px; margin-top: 12px; }
+
+.photo-card {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.photo-card img {
+  width: 100%;
+  max-height: 220px;
+  object-fit: cover;
+  border-radius: 4px;
+  background: var(--soft);
+}
+
+.badge {
+  display: inline-block;
+  width: fit-content;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: #e9f0ed;
+  color: var(--brand);
+  font-size: .8rem;
+  font-weight: 700;
+}
+
+.badge.pending { background: #fff2df; color: #7a4a1c; }
+.badge.rejected { background: #fde9e7; color: var(--danger); }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.actions button { margin-top: 0; }
+.notice {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: 6px;
+  background: #fff2df;
+  color: #7a4a1c;
+  font-weight: 600;
+}
+
 button {
   margin-top: 10px;
   padding: 10px;
@@ -110,7 +168,6 @@ pre {
 <h2>Auth</h2>
 
 <input id="username" placeholder="username">
-<input id="email" placeholder="email">
 <input id="password" type="password" placeholder="password">
 
 <button onclick="register()">Register</button>
@@ -119,6 +176,38 @@ pre {
 <button class="secondary" onclick="me()">Me</button>
 
 <div id="authStatus" class="status"></div>
+</section>
+
+<!-- PHOTO PUBLICATION -->
+<section id="photoUploadSection" class="hidden">
+<h2>Dodaj zdjęcie</h2>
+<p class="hint">Wybierz oznaczone osoby z listy (możesz zaznaczyć kilka, używając Ctrl lub Cmd). Zdjęcie nie trafi do publicznej listy, dopóki każda oznaczona osoba go nie zaakceptuje.</p>
+
+<input id="photoFile" type="file" accept="image/jpeg,image/png,image/webp">
+<label for="taggedUsers">Oznacz użytkowników</label>
+<select id="taggedUsers" multiple aria-describedby="taggedUsersHint"></select>
+<p id="taggedUsersHint" class="hint">Lista zawiera zarejestrowanych użytkowników poza Tobą.</p>
+<button onclick="uploadPhoto()">Wyślij do akceptacji</button>
+<div id="uploadStatus" class="status"></div>
+</section>
+
+<section id="consentSection" class="hidden">
+<h2>Prośby o zgodę</h2>
+<p class="hint">Zaakceptowanie przez ostatnią oznaczoną osobę publikuje zdjęcie. Odrzucenie blokuje jego publikację.</p>
+<div id="consentAlert" class="notice hidden" role="status"></div>
+<div id="consentRequests" class="photo-list"></div>
+</section>
+
+<section id="myPhotosSection" class="hidden">
+<h2>Moje zdjęcia</h2>
+<div id="myPhotos" class="photo-list"></div>
+</section>
+
+<section>
+<h2>Publiczne zdjęcia</h2>
+<p class="hint">Widoczne są wyłącznie zdjęcia, na które wszyscy oznaczeni użytkownicy wyrazili zgodę.</p>
+<button class="secondary" onclick="loadPublicPhotos()">Odśwież</button>
+<div id="publicPhotos" class="photo-list"></div>
 </section>
 
 <!-- OUTPUT -->
@@ -167,6 +256,16 @@ function show(data) {
       : JSON.stringify(data, null, 2);
 }
 
+function isLoggedIn() {
+  return Boolean(localStorage.getItem("token"));
+}
+
+function updateAuthenticatedView() {
+  const authenticated = isLoggedIn();
+  ["photoUploadSection", "consentSection", "myPhotosSection"].forEach(id =>
+    document.getElementById(id).classList.toggle("hidden", !authenticated));
+}
+
 async function parse(res) {
   const text = await res.text();
   try { return JSON.parse(text); }
@@ -191,7 +290,6 @@ async function register() {
     headers: headers(true),
     body: JSON.stringify({
       username: username.value,
-      email: email.value,
       password: password.value
     })
   });
@@ -218,6 +316,8 @@ async function login() {
   if (res.ok && jwt) {
     localStorage.setItem("token", jwt);
     document.getElementById("authStatus").textContent = "Zalogowano";
+    updateAuthenticatedView();
+    await refreshPhotoAreas();
   } else {
     document.getElementById("authStatus").textContent = "Błąd logowania";
   }
@@ -236,6 +336,7 @@ async function logout() {
   localStorage.removeItem("token");
 
   document.getElementById("authStatus").textContent = "Wylogowano";
+  updateAuthenticatedView();
   show("logout");
 }
 
@@ -247,6 +348,191 @@ async function me() {
 
   show(await parse(res));
 }
+
+function selectedTaggedUsernames() {
+  return Array.from(document.getElementById("taggedUsers").selectedOptions)
+    .map(option => option.value);
+}
+
+function errorMessage(data, fallback) {
+  if (typeof data === "string" && data.trim()) return data;
+  return data?.message || data?.title || fallback;
+}
+
+async function uploadPhoto() {
+  const file = photoFile.files[0];
+  if (!file) {
+    document.getElementById("uploadStatus").textContent = "Wybierz zdjęcie.";
+    return;
+  }
+
+  const form = new FormData();
+  form.append("file", file);
+  selectedTaggedUsernames().forEach(username => form.append("taggedUsernames", username));
+
+  const res = await fetch(url("/api/photos"), {
+    method: "POST",
+    headers: headers(),
+    body: form
+  });
+  const data = await parse(res);
+
+  document.getElementById("uploadStatus").textContent = res.ok
+    ? "Zdjęcie zostało wysłane. Oczekuje na zgody oznaczonych osób."
+    : `Nie udało się wysłać zdjęcia: ${errorMessage(data, "nieznany błąd")}`;
+  show(data);
+
+  if (res.ok) {
+    photoFile.value = "";
+    document.getElementById("taggedUsers").selectedIndex = -1;
+    await refreshPhotoAreas();
+  }
+}
+
+async function request(path, options = {}) {
+  const res = await fetch(url(path), {
+    headers: headers(),
+    ...options
+  });
+  return { res, data: await parse(res) };
+}
+
+function statusClass(status) {
+  return status === "PendingConsent" ? "pending" : status === "Rejected" ? "rejected" : "";
+}
+
+async function addPhotoPreview(card, photoId, alt) {
+  const res = await fetch(url(`/api/photos/${photoId}/content`), { headers: headers() });
+  if (!res.ok) return;
+  const image = document.createElement("img");
+  image.alt = alt;
+  image.src = URL.createObjectURL(await res.blob());
+  card.prepend(image);
+}
+
+function emptyList(container, message) {
+  container.replaceChildren();
+  if (message) container.textContent = message;
+}
+
+async function loadConsentRequests() {
+  const container = document.getElementById("consentRequests");
+  const alert = document.getElementById("consentAlert");
+  const { res, data } = await request("/api/photos/consent-requests");
+  if (!res.ok) {
+    alert.classList.add("hidden");
+    return emptyList(container, `Nie udało się pobrać próśb: ${errorMessage(data, "nieznany błąd")}`);
+  }
+  if (!data.length) {
+    alert.classList.add("hidden");
+    return emptyList(container, "Brak oczekujących próśb.");
+  }
+
+  alert.textContent = `Masz ${data.length} ${data.length === 1 ? "nową prośbę" : "nowe prośby"} o zgodę na publikację.`;
+  alert.classList.remove("hidden");
+
+  container.replaceChildren();
+  for (const item of data) {
+    const card = document.createElement("article");
+    card.className = "photo-card";
+    card.innerHTML = `<strong>${escapeHtml(item.originalFileName)}</strong>
+      <span>Autor: ${escapeHtml(item.ownerUsername)}</span>
+      <span class="badge pending">Oczekuje na Twoją zgodę</span>`;
+
+    const actions = document.createElement("div");
+    actions.className = "actions";
+    const approve = document.createElement("button");
+    approve.textContent = "Zgadzam się";
+    approve.onclick = () => respondToConsent(item.photoId, true);
+    const decline = document.createElement("button");
+    decline.className = "secondary";
+    decline.textContent = "Nie zgadzam się";
+    decline.onclick = () => respondToConsent(item.photoId, false);
+    actions.append(approve, decline);
+    card.append(actions);
+    container.append(card);
+    addPhotoPreview(card, item.photoId, item.originalFileName);
+  }
+}
+
+async function respondToConsent(photoId, approve) {
+  const action = approve ? "approve" : "decline";
+  const { res, data } = await request(`/api/photos/${photoId}/consents/${action}`, { method: "POST" });
+  show(data);
+  if (!res.ok) return;
+  await refreshPhotoAreas();
+}
+
+async function loadMyPhotos() {
+  const container = document.getElementById("myPhotos");
+  const { res, data } = await request("/api/photos/mine");
+  if (!res.ok) return emptyList(container, `Nie udało się pobrać zdjęć: ${errorMessage(data, "nieznany błąd")}`);
+  renderPhotoList(container, data, "Brak wysłanych zdjęć.");
+}
+
+async function loadPublicPhotos() {
+  const container = document.getElementById("publicPhotos");
+  const { res, data } = await request("/api/photos/public");
+  if (!res.ok) return emptyList(container, `Nie udało się pobrać publicznych zdjęć: ${errorMessage(data, "nieznany błąd")}`);
+  renderPhotoList(container, data, "Brak opublikowanych zdjęć.");
+}
+
+function renderPhotoList(container, photos, emptyMessage) {
+  if (!photos.length) return emptyList(container, emptyMessage);
+  container.replaceChildren();
+  for (const photo of photos) {
+    const card = document.createElement("article");
+    card.className = "photo-card";
+    const tagged = photo.taggedUsers.length
+      ? photo.taggedUsers.map(user => `${escapeHtml(user.username)} (${escapeHtml(user.consentStatus)})`).join(", ")
+      : "brak";
+    card.innerHTML = `<strong>${escapeHtml(photo.originalFileName)}</strong>
+      <span class="badge ${statusClass(photo.publicationStatus)}">${escapeHtml(photo.publicationStatus)}</span>
+      <span>Oznaczeni: ${tagged}</span>`;
+    container.append(card);
+    addPhotoPreview(card, photo.id, photo.originalFileName);
+  }
+}
+
+function escapeHtml(value) {
+  const element = document.createElement("span");
+  element.textContent = value || "";
+  return element.innerHTML;
+}
+
+async function refreshPhotoAreas() {
+  if (!isLoggedIn()) return;
+  await Promise.all([loadTaggableUsers(), loadConsentRequests(), loadMyPhotos(), loadPublicPhotos()]);
+}
+
+async function loadTaggableUsers() {
+  const select = document.getElementById("taggedUsers");
+  const previousSelection = new Set(selectedTaggedUsernames());
+  const { res, data } = await request("/api/users/taggable");
+
+  select.replaceChildren();
+  if (!res.ok) {
+    const option = new Option(`Nie udało się pobrać listy: ${errorMessage(data, "nieznany błąd")}`, "");
+    option.disabled = true;
+    select.add(option);
+    return;
+  }
+
+  if (!data.length) {
+    const option = new Option("Brak innych zarejestrowanych użytkowników.", "");
+    option.disabled = true;
+    select.add(option);
+    return;
+  }
+
+  data.forEach(user => {
+    const option = new Option(user.username, user.username, false, previousSelection.has(user.username));
+    select.add(option);
+  });
+}
+
+updateAuthenticatedView();
+loadPublicPhotos();
 
 </script>
 

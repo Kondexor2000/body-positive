@@ -66,7 +66,18 @@ builder.Services.AddDbContext<AuditDbContext>(options =>
 
 builder.Services.AddHttpClient<INudeNetClient, NudeNetHttpClient>();
 builder.Services.AddSingleton<IBackgroundAuditQueue, BackgroundAuditQueue>();
-builder.Services.AddScoped<IObjectStorage, S3ObjectStorage>();
+var storageSettings = builder.Configuration
+    .GetSection(StorageOptions.SectionName)
+    .Get<StorageOptions>() ?? new StorageOptions();
+
+if (storageSettings.UseLocalFileStorage)
+{
+    builder.Services.AddScoped<IObjectStorage, LocalObjectStorage>();
+}
+else
+{
+    builder.Services.AddScoped<IObjectStorage, S3ObjectStorage>();
+}
 builder.Services.AddScoped<IReportRenderer, HtmlReportRenderer>();
 builder.Services.AddHostedService<AuditWorker>();
 
@@ -79,7 +90,7 @@ builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
-        options.TokenValidationParameters = new TokenValidationParameters
+        options.TokenValidationParameters = new()
         {
             ValidateIssuer = true,
             ValidateAudience = true,
@@ -163,6 +174,7 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AuditDbContext>();
     await db.Database.EnsureCreatedAsync();
+    await PhotoSchemaInitializer.EnsureCreatedAsync(db);
 }
 
 // ---------------- SWAGGER ----------------

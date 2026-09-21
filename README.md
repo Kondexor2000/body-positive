@@ -13,6 +13,7 @@ Body-positive WebAPI for auditing image moderation. The project accepts uploads,
 - NudeNet integration via HTTP endpoint `/detect`
 - HTML report: `/api/audits/{id}/report`
 - Static test client: `/api-test.html`
+- Consent-gated photo publication for tagged users
 
 ## Local Setup
 
@@ -60,7 +61,47 @@ dotnet test
 
 Unit tests use Moq to mock dependencies such as database and external services. Integration tests use WebApplicationFactory to verify endpoints.
 
-Current status: **27/27 tests passing**.
+Current status: **30/30 tests passing**.
+
+## Publication consent for tagged people
+
+`POST /api/photos` accepts a multipart image and repeated `taggedUsernames` form
+fields. The uploaded image is kept out of the public feed while at least one
+tagged person has not answered. Each tagged person receives their pending items
+from `GET /api/photos/consent-requests` and can answer using one of:
+
+- `POST /api/photos/{id}/consents/approve`
+- `POST /api/photos/{id}/consents/decline`
+
+The photo moves to `Published` only after every tagged person approves. A single
+decline changes it to `Rejected`, so it cannot be published later through this
+flow. Pending images and their content are available only to the uploader and
+the tagged people; `GET /api/photos/public` contains published images only.
+
+## Accounts and authentication
+
+The API already includes the required identity layer. A person must have an
+account before they can be tagged and give consent: consent requests are linked
+to their immutable user ID from the JWT, not only to a username supplied by the
+client.
+
+- `POST /api/auth/register` creates an account with `username` and `password`.
+  Passwords are stored as BCrypt hashes. E-mail is optional and is not used for
+  signing in or publication consent.
+- `POST /api/auth/login` returns an `accessToken` JWT.
+- Send it as `Authorization: Bearer <accessToken>` for uploading a photo,
+  reading consent requests and submitting a decision.
+- `POST /api/auth/logout` revokes the active token; `GET /api/auth/me` returns
+  the signed-in account.
+
+The static test page at `/api-test.html` contains controls for registration and
+login. The API key is still required for protected API calls in addition to the
+JWT where the deployment has API-key middleware enabled.
+
+During development, photo uploads are stored locally in `App_Data/uploads`, so
+the consent flow works without a running MinIO service. Set
+`Storage:UseLocalFileStorage` to `false` when a production S3/MinIO service is
+configured.
 
 ## Example Upload
 

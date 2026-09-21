@@ -10,4 +10,5 @@ public sealed class StorageOptions
     public string Region { get; init; } = "us-east-1";
     public string? ServiceUrl { get; init; } = "http://localhost:9000";
     public bool ForcePathStyle { get; init; } = true;
+    public bool UseLocalFileStorage { get; init; }
 }

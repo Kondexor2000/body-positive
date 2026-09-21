@@ -6,7 +6,9 @@ public sealed class User
 
     public string Username { get; set; } = string.Empty;
 
-    public string Email { get; set; } = string.Empty;
+    // Optional contact detail reserved for a future account-recovery flow.
+    // It is not used to sign in or to give publication consent.
+    public string? Email { get; set; }
 
     public string PasswordHash { get; set; } = string.Empty;
 
